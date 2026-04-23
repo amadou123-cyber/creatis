@@ -15,8 +15,3 @@ The objective is to integrate these modern generative models into the emission i
 * **Frameworks:** [PyTorch, TensorFlow, Deepinverse]
 * **Tools:** [Vscode, Git]
 
-## 📂 Structure
-- `src/`: Main source code and algorithms.
-- `notebooks/`: Experimental results and data exploration.
-- `docs/`: Relevant papers and my internship reports.
-- `requirements.txt`: List of dependencies.
