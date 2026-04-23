@@ -8,11 +8,11 @@ This repository hosts the code and research developed during my internship at th
 Conventional reconstruction methods, such as the Maximum Likelihood Expectation Maximization (MLEM) algorithm, are widely used in clinical practice but tend to amplify noise. Recent advances in deep learning and generative models—specifically Diffusion Models and Flow Matching—offer powerful priors for inverse problems. However, their application to Poisson inverse problems in medical imaging remains largely unexplored and raises concerns regarding reliability.
 
 The objective is to integrate these modern generative models into the emission imaging reconstruction process, specifically accounting for Poisson noise and ensuring convergence guarantees.
-* **Status:** Work in Progress 🚀
+* **Status:** Work in Progress 🚀.
 
 ## 🛠 Tech Stack
-* **Language:** Python
-* **Frameworks:** [PyTorch, TensorFlow, Deepinverse]
-* **Tools:** [Vscode, Git]
-* **Author:** Thierno Amadou Sow (M2 Student in Claude Bernard University in SMSD)
+* **Language:** Python.
+* **Frameworks:** PyTorch, TensorFlow, Deepinverse.
+* **Tools:** Vscode, Git.
+* **Author:** Thierno Amadou Sow (M2 Student in Claude Bernard University in SMSD).
 
