@@ -1,0 +1,21 @@
+measurement:
+  operator:
+    name: tomography
+    img_size: 256
+    angles: 180
+
+  noise:
+    name: poisson
+    rate: 0.01
+
+conditioning:
+  method: ps
+  params:
+    scale: 3
+
+data:
+  name: ffhq
+  root: ./data/samples/
+
+results:
+  name: tomo_100

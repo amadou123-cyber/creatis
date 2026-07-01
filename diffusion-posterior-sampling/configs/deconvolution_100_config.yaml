@@ -1,0 +1,22 @@
+measurement:
+  operator:
+    name: deconvolution
+    n_channels: 3
+    img_size: 256
+    sigma: 2.0
+   
+
+  noise:
+    name: poisson
+    rate: 0.01
+
+conditioning:
+  method: ps_prox
+  params:
+    tau: 0.1
+data:
+  name: ffhq
+  root: ./data/samples/
+  
+results:
+  name: deconvolution_100
