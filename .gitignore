@@ -1,0 +1,10 @@
+*.pth
+*.pt
+*.h5
+*.ckpt
+*.tar.gz
+*.zip
+*.npz
+data/
+weights/
+models/
