@@ -5,6 +5,7 @@
 *.tar.gz
 *.zip
 *.npz
-data/
+motionblur/
+bkse/
 weights/
 models/
