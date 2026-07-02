@@ -303,7 +303,7 @@ class GaussianDiffusion:
 
                 # Convert [-1, 1] to [0, 1]
                 img_tensor = (img_tensor + 1.0) / 2.0
-                # ground_tensor = (ground_tensor + 1.0) / 2.0
+                ground_tensor = (ground_tensor + 1.0) / 2.0
 
                 # Clamp
                 img_tensor = torch.clamp(img_tensor, 0.0, 1.0)
