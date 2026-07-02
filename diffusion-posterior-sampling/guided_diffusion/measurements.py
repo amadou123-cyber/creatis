@@ -185,7 +185,7 @@ class TomographyOperator(LinearOperator):
         import deepinv as dinv
 
         self.physics = dinv.physics.TomographyWithAstra(
-            img_size=[img_size, img_size], angles=180, n_detector_pixels=512
+            img_size=[img_size, img_size], angles=angles, n_detector_pixels=512
         ).to(device)
 
     def forward(self, data, **kwargs):
@@ -330,7 +330,7 @@ class PoissonNoise(Noise):
 
         # On appelle DIRECTEMENT la classe officielle de deepinv.
         # normalize=True permet de gérer automatiquement la mise à l'échelle.
-        self.dinv_poisson = dinv.physics.PoissonNoise(gain=rate, normalize=True)
+        self.dinv_poisson = dinv.physics.PoissonNoise(gain=rate)
 
     def forward(self, data):
         """

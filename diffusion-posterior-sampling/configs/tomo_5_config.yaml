@@ -9,9 +9,9 @@ measurement:
     rate: 0.2
 
 conditioning:
-  method: bregman_dps
+  method: ps_prox
   params:
-    scale: 0.2  
+    tau: 0.2  
 
 data:
   name: ffhq

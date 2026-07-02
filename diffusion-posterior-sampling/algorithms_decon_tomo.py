@@ -47,19 +47,6 @@ def model_deconvolution(n_channels, img_size, gain, device):
     return physics
 
 
-def compare_to_butterfly(img_path, middle_path, image, image_name="butterfly.png"):
-    ext_img = Image.open(img_path).convert("RGB")
-    middle_img = Image.open(middle_path).convert("RGB")
-    int_img = Image.open(image).convert("RGB")
-    transform = T.Compose([T.Resize(int_img.size), T.ToTensor()])
-    ext_tensor = transform(ext_img).unsqueeze(0)
-    middle_tensor = transform(middle_img).unsqueeze(0)
-    init_tensor = transform(int_img).unsqueeze(0)
-    # psnr_input = dinv.metric.PSNR()(init_tensor, middle_tensor).item()
-    psnr_score = dinv.metric.PSNR()(init_tensor, ext_tensor).item()
-    return psnr_score, ext_tensor, init_tensor, middle_tensor
-
-
 def model_tomo(n_channels, img_size, gain, device):
     physics = dinv.physics.TomographyWithAstra(
         img_size=[256, 256],
@@ -182,21 +169,8 @@ for i in range(len(info)):
         config_task = configs[task][gain_val_str]
         model_config = "configs/imagenet_model_config.yaml"
         diffusion_config = "configs/diffusion_config.yaml"
-        sample, psnr, ssim = main(model_config, diffusion_config, config_task)
-        name = "deconvolution_" + gain_val_str
-        in_path = f"./results/configs/{name}/recon/00000.png"
-        middle_path = f"./results/configs/{name}/input/00000.png"
-        out_path = f"./results/configs/{name}/label/00000.png"
-        psnr_score, ext_tensor, init_tensor, middle_tensor = compare_to_butterfly(
-            in_path, middle_path, out_path
-        )
+        sample, psnr, ssim = main(x, y, model_config, diffusion_config, config_task)
         ssim_value = dinv.metric.SSIM()
-        print(
-            f"PSNR score: {psnr:.2f} dB",
-            f"PSNR score (ext): {psnr_score:.2f} dB",
-            f"SSIM score (ext): {ssim:.2f}",
-        )
-        print(ssim_value(x, y).item())
         dps = dinv.sampling.DPS(
             model_gs,
             schedule="vp",
@@ -254,30 +228,30 @@ for i in range(len(info)):
             "MLEM-TV": tensor_to_np(x_mlem_tv_scratch_fista),
             "PnP-MM": tensor_to_np(x_pnpmm),
             "DPS": tensor_to_np(x_dps),
-            "Ours": tensor_to_np(ext_tensor),
+            "Ours": tensor_to_np(sample),
             "psnr": {
                 "Measurement": (
-                    f"{psnr_fn(x, y).item():.2f} dB"
+                    f"PSNR: {psnr_fn(x, y).item():.2f} dB"
                     if task == "deconvolution"
                     else "Projections"
                 ),
-                "MLEM": f"{psnr_fn(x, x_mlem_scratch).item():.2f} dB",
-                "MLEM-TV": f"{psnr_fn(x, x_mlem_tv_scratch_fista).item():.2f} dB",
-                "PnP-MM": f"{psnr_fn(x, x_pnpmm).item():.2f} dB",
-                "DPS": f"{psnr_fn(x, x_dps).item():.2f} dB",
-                "Ours": f"{psnr:.2f} dB",
+                "MLEM": f"PSNR: {psnr_fn(x, x_mlem_scratch).item():.2f} dB",
+                "MLEM-TV": f"PSNR: {psnr_fn(x, x_mlem_tv_scratch_fista).item():.2f} dB",
+                "PnP-MM": f"PSNR: {psnr_fn(x, x_pnpmm).item():.2f} dB",
+                "DPS": f"PSNR: {psnr_fn(x, x_dps).item():.2f} dB",
+                "Ours": f"PSNR: {psnr:.2f} dB",
             },
             "ssim": {
                 "Measurement": (
-                    f"{ssim_value(x, y).item():.4f}"
+                    f"SSIM: {ssim_value(x, y).item():.4f}"
                     if task == "deconvolution"
                     else "Projections"
                 ),
-                "MLEM": f"{ssim_value(x, x_mlem_scratch).item():.4f}",
-                "MLEM-TV": f"{ssim_value(x, x_mlem_tv_scratch_fista).item():.4f}",
-                "PnP-MM": f"{ssim_value(x, x_pnpmm).item():.4f}",
-                "DPS": f"{ssim_value(x, x_dps).item():.4f}",
-                "Ours": f"{ssim:.4f}",
+                "MLEM": f"SSIM: {ssim_value(x, x_mlem_scratch).item():.4f}",
+                "MLEM-TV": f"SSIM: {ssim_value(x, x_mlem_tv_scratch_fista).item():.4f}",
+                "PnP-MM": f"SSIM: {ssim_value(x, x_pnpmm).item():.4f}",
+                "DPS": f"SSIM: {ssim_value(x, x_dps).item():.4f}",
+                "Ours": f"SSIM: {ssim:.4f}",
             },
         }
 

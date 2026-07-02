@@ -1,6 +1,7 @@
 from functools import partial
 import os
 import argparse
+from random import sample
 import yaml
 
 import torch
@@ -18,10 +19,6 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-model_config = "configs/imagenet_model_config.yaml"
-diffusion_config = "configs/diffusion_config.yaml"
-task_configs = "configs/deconvolution_5_config.yaml"
-
 
 def load_yaml(file_path: str) -> dict:
     with open(file_path) as f:
@@ -30,30 +27,25 @@ def load_yaml(file_path: str) -> dict:
 
 
 def main(
+    x,
+    y,
     model_config,
     diffusion_config,
     task_configs,
-    gpu=1,
     save_dir="./results",
-    scale=0,
     tau=0,
 ):
-    # logger
-    logger = get_logger()
 
     # Device setting
     device_str = "cuda"
-    logger.info(f"Device set to {device_str}.")
+    print(f">>>>>> Device set to {device_str}.")
     device = torch.device(device_str)
 
     # Load configurations
     model_config = load_yaml(model_config)
     diffusion_config = load_yaml(diffusion_config)
     task_config = load_yaml(task_configs)
-    # task_config["conditioning"]["params"]["scale"] = scale
     # task_config["conditioning"]["params"]["tau"] = tau
-    # assert model_config['learn_sigma'] == diffusion_config['learn_sigma'], \
-    # "learn_sigma must be the same for model and diffusion configuartion."
 
     # Load model
     model = create_model(**model_config)
@@ -70,7 +62,7 @@ def main(
         if i == "name":
             i = "noise"
         o += f" / {i}: {j}"
-    logger.info(f"Operation: {measure_config['operator']['name']}{o}")
+    print(f">>>>>> Operation: {measure_config['operator']['name']}{o}")
 
     # Prepare conditioning method
     cond_config = task_config["conditioning"]
@@ -82,7 +74,7 @@ def main(
     o = ""
     for i, j in l.items():
         o += f" / {i}: {j}"
-    logger.info(f"Conditioning method: {task_config['conditioning']['method']}{o}")
+    print(f">>>>>> Conditioning method: {task_config['conditioning']['method']}{o}")
 
     # Load diffusion sampler
     sampler = create_sampler(**diffusion_config)
@@ -96,60 +88,136 @@ def main(
     os.makedirs(out_path, exist_ok=True)
     for img_dir in ["input", "recon", "progress", "label"]:
         os.makedirs(os.path.join(out_path, img_dir), exist_ok=True)
+        # # Prepare dataloader
+        # data_config = task_config["data"]
+        # transform = transforms.Compose(
+        #     [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
+        # )
+        # dataset = get_dataset(**data_config, transforms=transform)
+        # loader = get_dataloader(dataset, batch_size=1, num_workers=0, train=False)
 
-    # Prepare dataloader
-    data_config = task_config["data"]
-    transform = transforms.Compose(
-        [transforms.ToTensor(), transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))]
-    )
-    dataset = get_dataset(**data_config, transforms=transform)
-    loader = get_dataloader(dataset, batch_size=1, num_workers=0, train=False)
+        # # Exception) In case of inpainting, we need to generate a mask
+        # if measure_config["operator"]["name"] == "inpainting":
+        #     mask_gen = mask_generator(**measure_config["mask_opt"])
 
-    # Exception) In case of inpainting, we need to generate a mask
-    if measure_config["operator"]["name"] == "inpainting":
-        mask_gen = mask_generator(**measure_config["mask_opt"])
+        # # Do Inference
+        # for i, ref_img in enumerate(loader):
+        #     print(f"Inference for image {i}")
+        #     fname = str(i).zfill(5) + ".png"
+        #     ref_img = ref_img.to(device)
 
-    # Do Inference
-    for i, ref_img in enumerate(loader):
-        logger.info(f"Inference for image {i}")
-        fname = str(i).zfill(5) + ".png"
-        ref_img = ref_img.to(device)
+        #     # Exception) In case of inpainging,
+        #     if measure_config["operator"]["name"] == "inpainting":
+        #         mask = mask_gen(ref_img)
+        #         mask = mask[:, 0, :, :].unsqueeze(dim=0)
+        #         measurement_cond_fn = partial(cond_method.conditioning, mask=mask)
+        #         sample_fn = partial(sample_fn, measurement_cond_fn=measurement_cond_fn)
 
-        # Exception) In case of inpainging,
+        #         # Forward measurement model (Ax + n)
+        #         y = operator.forward(ref_img, mask=mask)
+        #         y_n = noiser(y)
+
+        #     else:
+        #         # Forward measurement model (Ax + n)
+        #         y = operator.forward(ref_img)
+        #         y_n = noiser(y)
+
+        #     # Sampling
+        #     x_start = torch.randn(ref_img.shape, device=device).requires_grad_()
+        #     img_tensor, psnr_value, ssim_value = sample_fn(
+        #         method=task_config["conditioning"]["method"],
+        #         ground=ref_img,
+        #         x_start=x_start,
+        #         measurement=y_n,
+        #         record=True,
+        #         save_root=out_path,
+        #     )
+
+        #     plt.imsave(os.path.join(out_path, "input", fname), clear_color(y_n))
+        #     plt.imsave(os.path.join(out_path, "label", fname), clear_color(ref_img))
+        #     plt.imsave(os.path.join(out_path, "recon", fname), clear_color(img_tensor))
+        # Exception) In case of inpainting, we need to generate a mask
         if measure_config["operator"]["name"] == "inpainting":
-            mask = mask_gen(ref_img)
-            mask = mask[:, 0, :, :].unsqueeze(dim=0)
-            measurement_cond_fn = partial(cond_method.conditioning, mask=mask)
-            sample_fn = partial(sample_fn, measurement_cond_fn=measurement_cond_fn)
+            mask_gen = mask_generator(**measure_config["mask_opt"])
 
-            # Forward measurement model (Ax + n)
-            y = operator.forward(ref_img, mask=mask)
-            y_n = noiser(y)
+        # Do Inference
+        if True:
+            print("x.min():", x.min(), "x.max():", x.max())
+            i = 0
+            print(f">>>>>> Inference for image {i}")
+            fname = str(i).zfill(5) + ".png"
 
-        else:
-            # Forward measurement model (Ax + n)
-            y = operator.forward(ref_img)
-            y_n = noiser(y)
+            # Exception) In case of inpainging,
+            if measure_config["operator"]["name"] == "inpainting":
+                mask = mask_gen(x)
+                mask = mask[:, 0, :, :].unsqueeze(dim=0)
+                measurement_cond_fn = partial(cond_method.conditioning, mask=mask)
+                sample_fn = partial(sample_fn, measurement_cond_fn=measurement_cond_fn)
 
-        # Sampling
-        x_start = torch.randn(ref_img.shape, device=device)
-        img_tensor, psnr_value, ssim_value = sample_fn(
-            method=task_config["conditioning"]["method"],
-            ground=ref_img,
-            x_start=x_start,
-            measurement=y_n,
-            record=True,
-            save_root=out_path,
-        )
-        plt.imsave(os.path.join(out_path, "input", fname), clear_color(y_n))
-        plt.imsave(os.path.join(out_path, "label", fname), clear_color(ref_img))
-        plt.imsave(os.path.join(out_path, "recon", fname), clear_color(img_tensor))
+                # Forward measurement model (Ax + n)
+                y = operator.forward(x, mask=mask)
+                y_n = noiser(y)
+
+            else:
+                # # Forward measurement model (Ax + n)
+                # y = operator.forward(x)
+                # y_n = noiser(y)
+                pass
+            plt.imsave(os.path.join(out_path, "input", fname), clear_color(y))
+            plt.imsave(os.path.join(out_path, "label", fname), clear_color(x))
+            # Sampling
+            x_start = torch.randn(x.shape, device=device)
+            img_tensor, psnr_value, ssim_value = sample_fn(
+                method=task_config["conditioning"]["method"],
+                ground=x,
+                x_start=x_start,
+                measurement=y,
+                record=False,
+                save_root=out_path,
+            )
+
+            plt.imsave(os.path.join(out_path, "recon", fname), clear_color(img_tensor))
         return img_tensor, psnr_value, ssim_value
 
 
 if __name__ == "__main__":
-    main(
-        model_config,
-        diffusion_config,
-        task_configs,
+    import deepinv as dinv
+
+    model_config = "configs/imagenet_model_config.yaml"
+    diffusion_config = "configs/diffusion_config.yaml"
+    task_configs = "configs/deconvolution_60_config.yaml"
+
+    image_name = "butterfly.png"
+    device = "cuda"
+    x = dinv.utils.load_example(
+        image_name,
+        img_size=256,
+        resize_mode="resize",
+    ).to(device)
+    n = 10
+    taus = torch.linspace(0.08, 0.5, n)
+    best_ssim = 0
+    best_tau = 0
+    i = 1
+    for tau in taus:
+        print(
+            f"-------------------------- {i}/{n}.Tau: {tau.item():.3f} --------------------------"
+        )
+        img_tensor, psnr_value, ssim_value = main(
+            x=x,
+            model_config=model_config,
+            diffusion_config=diffusion_config,
+            task_configs=task_configs,
+            tau=tau.item(),
+        )
+        print(
+            f"Tau: {tau.item():.3f} | PSNR: {psnr_value:.3f} | SSIM: {ssim_value:.3f}"
+        )
+        if ssim_value > best_ssim:
+            best_ssim = ssim_value
+            best_tau = tau.item()
+        i += 1
+
+    print(
+        f"-------------------------- Best Tau: {best_tau:.3f} | Best SSIM: {best_ssim:.3f} --------------------------"
     )

@@ -3,6 +3,7 @@ measurement:
     name: tomography
     img_size: 256
     angles: 180
+ 
 
   noise:
     name: poisson
@@ -11,7 +12,7 @@ measurement:
 conditioning:
   method: ps
   params:
-    scale: 3
+    scale: 0.5
 
 data:
   name: ffhq

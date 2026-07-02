@@ -5,7 +5,10 @@
 *.tar.gz
 *.zip
 *.npz
+*.png
+**/results/**
 motionblur/
 bkse/
 weights/
 models/
+*.pyc

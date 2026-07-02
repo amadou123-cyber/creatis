@@ -9,9 +9,9 @@ measurement:
     rate: 0.01
 
 conditioning:
-  method: ps
+  method: ps8prox
   params:
-    scale: 2.0    
+    tau: 0.2    
 
 data:
   name: ffhq

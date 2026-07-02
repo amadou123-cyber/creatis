@@ -212,7 +212,7 @@ class PosteriorSamplingPoissonProxEM(ConditioningMethod):
 
         if self.iter_count == 1:
             x_t = x_prev
-            x_0_hat = measurement
+            x_0_hat = self.operator.transpose(measurement)
             x_0_hat = torch.clamp(x_0_hat, -1.0, 1.0)
 
         prox = self.prox_em_majorant(

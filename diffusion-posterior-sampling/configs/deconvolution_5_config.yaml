@@ -13,7 +13,7 @@ measurement:
 conditioning:
   method: ps_prox
   params:
-    tau: 0.04
+    tau: 0.044 #0.04
 
 data:
   name: ffhq

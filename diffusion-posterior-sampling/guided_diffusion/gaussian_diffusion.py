@@ -241,12 +241,9 @@ class GaussianDiffusion:
             return img_tensor
 
         elif method == "ps_prox":
-            print("Using proximal method for sampling...")
-            global_best_ssim = -np.inf
-            global_best_steps = 0
             device = x_start.device
             x0_prev = torch.ones_like(measurement)
-            x0_hat_prev = torch.ones_like(measurement)
+            x0_hat_prev = measurement
             x0_hat_prev = torch.clamp(x0_hat_prev, -1.0, 1.0)  # Sécurité
 
             pbar = tqdm(list(range(self.num_timesteps))[::-1])
@@ -306,7 +303,7 @@ class GaussianDiffusion:
 
                 # Convert [-1, 1] to [0, 1]
                 img_tensor = (img_tensor + 1.0) / 2.0
-                ground_tensor = (ground_tensor + 1.0) / 2.0
+                # ground_tensor = (ground_tensor + 1.0) / 2.0
 
                 # Clamp
                 img_tensor = torch.clamp(img_tensor, 0.0, 1.0)
@@ -315,23 +312,8 @@ class GaussianDiffusion:
                 # Compute ssim
                 ssim_value = dinv.metric.SSIM()(img_tensor, ground_tensor).item()
                 psnr_value = dinv.metric.PSNR()(img_tensor, ground_tensor).item()
-                if record:
-                    if idx % 5 == 0:
-                        file_path = os.path.join(
-                            save_root, f"progress/x_{str(idx).zfill(4)}.png"
-                        )
-                        plt.imsave(file_path, clear_color(img_tensor))
-                if ssim_value > global_best_ssim:
-                    global_best_ssim = ssim_value
-                    global_best_steps = self.num_timesteps - idx
-
                 pbar.set_postfix(
-                    {
-                        "psnr": psnr_value,
-                        "ssim": ssim_value,
-                        "best_ssim": global_best_ssim,
-                        "best_step": global_best_steps,
-                    },
+                    {"psnr": psnr_value, "ssim": ssim_value},
                     refresh=False,
                 )
 
