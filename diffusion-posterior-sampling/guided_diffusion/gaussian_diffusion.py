@@ -22,6 +22,9 @@ def register_sampler(name: str):
     return wrapper
 
 
+# Coucou
+
+
 def get_sampler(name: str):
     if __SAMPLER__.get(name, None) is None:
         raise NameError(f"Name {name} is not defined!")
