@@ -46,11 +46,11 @@ In this work, we propose two novel algorithmic adaptations:
 ### High Noise Level (Gain = 1/5)
 
 <p align="center">
-  <img src="./figures/moyennes_gain_1_5_30.png" alt="Reconstructions moyennes - Bruit fort" width="85%" />
+  <img src="./figures/reconstructions_moyennes_gain_1_5_30.png" alt="Reconstructions moyennes - Bruit fort" width="85%" />
 </p>
 
 <p align="center">
-  <img src="./figures/psnr_ssim_gain_1_5_30.png" alt="Boxplots PSNR/SSIM - Bruit fort" width="85%" />
+  <img src="./figures/boxplots_psnr_ssim_gain_1_5_30.png" alt="Boxplots PSNR/SSIM - Bruit fort" width="85%" />
 </p>
 
 We only tested it on the deconvolution and only on natural images.
