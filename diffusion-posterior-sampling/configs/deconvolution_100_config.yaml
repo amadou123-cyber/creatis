@@ -13,7 +13,16 @@ measurement:
 conditioning:
   method: ps_prox
   params:
-    tau: 0.173 #0.1
+    tau: 0.1
+
+# conditioning:
+#   method: ps++
+#   params:
+#     scale: 0.1
+
+
+   
+
 data:
   name: ffhq
   root: ./data/samples/

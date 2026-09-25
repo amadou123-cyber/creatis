@@ -1,0 +1,15 @@
+#!/bin/bash
+#PBS -N EtudeStat_1_1/5
+#PBS -l nodes=1:ppn=2:gpus=1
+#PBS -q gpu
+#PBS -l walltime=24:00:00
+#PBS -l mem=32gb
+#PBS -o sortie_1.out
+#PBS -e erreur_1.err
+#PBS -m ae
+#PBS -M amadou.sow@creatis.insa-lyon.fr
+
+cd $HOME
+source .venv/bin/activate
+cd projet_creatis/diffusion-posterior-sampling
+python -u test.py

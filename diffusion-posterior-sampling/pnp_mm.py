@@ -122,7 +122,6 @@ def pnp_mm(
 
     with torch.no_grad():
         s = physics.A_adjoint(torch.ones_like(y))
-
         xk = x0.clone()
         xs = [x0.cpu().clone()] if keep_inter else None
         costs = []

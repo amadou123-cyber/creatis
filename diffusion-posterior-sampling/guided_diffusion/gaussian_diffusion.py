@@ -22,8 +22,17 @@ def register_sampler(name: str):
     return wrapper
 
 
-# Coucou
-# Coucou 2
+def score_network(model, x, alpha, t):
+
+    with torch.inference_mode():
+        model_output = model(x, t)
+
+    if model_output.shape[1] == 2 * x.shape[1]:
+        eps_pred, _ = torch.split(model_output, x.shape[1], dim=1)
+    else:
+        eps_pred = model_output  # Calcul de x_hat(i) à partir du bruit prédit
+    den = -eps_pred / (torch.sqrt(1.0 - alpha) + 1e-8)
+    return den
 
 
 def get_sampler(name: str):
@@ -192,13 +201,10 @@ class GaussianDiffusion:
         record,
         save_root,
     ):
-        """
-        The function used for sampling from noise.
-        """
-        if method in ["ps", "ps+"]:
+        if method in ["ps", "ps+", "dpsp_grad"]:
             img = x_start
             device = x_start.device
-
+            ground_tensor = self.manage_image(ground)
             pbar = tqdm(list(range(self.num_timesteps))[::-1])
             for idx in pbar:
                 time = torch.tensor([idx] * img.shape[0], device=device)
@@ -209,47 +215,38 @@ class GaussianDiffusion:
                 # Give condition.
                 noisy_measurement = self.q_sample(measurement, t=time)
 
-                # TODO: how can we handle argument for different condition method?
-                img, distance = measurement_cond_fn(
+                img, _ = measurement_cond_fn(
                     x_prev=img,
                     x_t=out["sample"],
                     x_0_hat=out["pred_xstart"],
                     measurement=measurement,
+                    noisy_measurement=noisy_measurement,
                 )
                 # In your sampling loop
                 img = img.detach_()
 
-                # Deep Inverse expects: (B, C, H, W) tensors in [0, 1]
-                img_tensor = (
-                    img.clone().cpu().unsqueeze(0)
-                )  # Add batch to the current dimensions.
-                ground_tensor = ground.clone().cpu().unsqueeze(0)
-                # Convert [-1, 1] to [0, 1]
-                img_tensor = (img_tensor + 1.0) / 2.0
-                ground_tensor = (ground_tensor + 1.0) / 2.0
-
-                # Clamp
-                img_tensor = torch.clamp(img_tensor, 0.0, 1.0)
-                ground_tensor = torch.clamp(ground_tensor, 0.0, 1.0)
+                img_tensor = self.manage_image(img)
 
                 # Compute PSNR
                 psnr_value = dinv.metric.PSNR()(img_tensor, ground_tensor)
-                pbar.set_postfix({"psnr": psnr_value.item()}, refresh=False)
+                ssim_value = dinv.metric.SSIM()(img_tensor, ground_tensor).item()
+                pbar.set_postfix(
+                    {"psnr": psnr_value.item(), "ssim": ssim_value}, refresh=False
+                )
                 if record:
                     if idx % 5 == 0:
                         file_path = os.path.join(
                             save_root, f"progress/x_{str(idx).zfill(4)}.png"
                         )
                         plt.imsave(file_path, clear_color(img))
+            return img_tensor, psnr_value.item(), ssim_value
 
-            return img_tensor
-
-        elif method == "ps_prox":
+        elif method == "dpsp_prox":
             device = x_start.device
             x0_prev = torch.ones_like(measurement)
-            x0_hat_prev = measurement
-            x0_hat_prev = torch.clamp(x0_hat_prev, -1.0, 1.0)  # Sécurité
-
+            x0_hat_prev = measurement.detach()
+            x0_hat_prev = torch.clamp(x0_hat_prev, -1.0, 1.0)
+            ground_tensor = self.manage_image(ground)
             pbar = tqdm(list(range(self.num_timesteps))[::-1])
             for idx in pbar:
                 x0_reg_current = measurement_cond_fn(
@@ -259,7 +256,7 @@ class GaussianDiffusion:
                     measurement=measurement,
                 )
                 x0_reg_current = torch.clamp(x0_reg_current, -1.0, 1.0)
-                # --- Diffusion (ajout de bruit) ---
+
                 alpha_bar = self.alphas_cumprod[idx]
                 alpha_bar_t = torch.tensor(alpha_bar, device=device).float()
                 x_start = torch.randn(ground.shape, device=device)
@@ -269,152 +266,60 @@ class GaussianDiffusion:
                 )
                 x_i = torch.clamp(x_i, -1.0, 1.0)
 
-                # --- Prédiction par le modèle (pas p_sample) ---
                 time = torch.tensor([idx] * x_start.shape[0], device=device)
                 with torch.inference_mode():
                     model_output = model(x_i, time)
-
                 if model_output.shape[1] == 2 * x_i.shape[1]:
                     eps_pred, _ = torch.split(model_output, x_i.shape[1], dim=1)
                 else:
                     eps_pred = model_output
 
-                # Calcul de x_hat(i) à partir du bruit prédit
                 x0_hat_current = (x_i - torch.sqrt(1.0 - alpha_bar_t) * eps_pred) / (
                     torch.sqrt(alpha_bar_t) + 1e-8
                 )
                 x0_hat_current = torch.clamp(x0_hat_current, -1.0, 1.0)
-
                 x0_prev = x0_reg_current
                 x0_hat_prev = x0_hat_current
-
                 img = x0_hat_current.detach_()
-
-                if img.dim() == 3:  # [C, H, W]
-                    img_tensor = img.clone().cpu().unsqueeze(0)
-                elif img.dim() == 4:  # [B, C, H, W]
-                    img_tensor = img.clone().cpu()
-                else:
-                    raise ValueError(f"img a {img.dim()} dimensions, attendu 3 ou 4")
-
-                # ground doit aussi avoir la même forme
-                if ground.dim() == 3:
-                    ground_tensor = ground.clone().cpu().unsqueeze(0)
-                elif ground.dim() == 4:
-                    ground_tensor = ground.clone().cpu()
-                else:
-                    raise ValueError(f"ground a {ground.dim()} dimensions")
-
-                # Convert [-1, 1] to [0, 1]
-                img_tensor = (img_tensor + 1.0) / 2.0
-                ground_tensor = (ground_tensor + 1.0) / 2.0
-
-                # Clamp
-                img_tensor = torch.clamp(img_tensor, 0.0, 1.0)
-                ground_tensor = torch.clamp(ground_tensor, 0.0, 1.0)
-
-                # Compute ssim
+                img_tensor = self.manage_image(img)
                 ssim_value = dinv.metric.SSIM()(img_tensor, ground_tensor).item()
                 psnr_value = dinv.metric.PSNR()(img_tensor, ground_tensor).item()
                 pbar.set_postfix(
                     {"psnr": psnr_value, "ssim": ssim_value},
                     refresh=False,
                 )
+                if record:
+                    if idx % 5 == 0:
+                        file_path = os.path.join(
+                            save_root, f"progress/x_{str(idx).zfill(4)}.png"
+                        )
+                        plt.imsave(file_path, clear_color(img_tensor))
 
             return img_tensor, psnr_value, ssim_value
-
-        else:
-            global_best_ssim = -np.inf
-            global_best_steps = 0
-            device = x_start.device
-            x0_prev = torch.ones_like(measurement)
-            x0_hat_brut = torch.ones_like(measurement)
-            x0_hat_brut = torch.clamp(x0_hat_brut, -1.0, 1.0)  # Sécurité
-            eta = 0.0
-            img = x_start
-            best_ssim = -float("inf")
-            best_img = None
-            pbar = tqdm(list(range(self.num_timesteps))[::-1])
-            for idx in pbar:
-                t = torch.tensor([idx] * img.shape[0], device=device)
-
-                # ---- 4. Prédiction du modèle (DDIM) ----
-                # On appelle p_sample avec eta (déjà défini dans DDIM)
-
-                x0_prox = measurement_cond_fn(
-                    x_prev=x_start,
-                    x_t=x0_prev,
-                    x_0_hat=img,
-                    measurement=measurement,
-                )
-                x0_prox = torch.clamp(x0_prox, -1.0, 1.0)
-                x0_prev = x0_prox.detach_()
-                out = self.p_sample(model, x0_prev, t)
-                x0_hat_brut = out["pred_xstart"]
-                img = x0_hat_brut.detach_()
-                img = torch.clamp(img, -1.0, 1.0)
-
-                # ---- 8. Monitoring SSIM et sauvegarde (identique à votre boucle) ----
-                if ground is not None:
-                    # Préparer les tenseurs pour SSIM (gestion des dimensions)
-                    if img.dim() == 3:
-                        img_tensor = img.clone().cpu().unsqueeze(0)
-                    elif img.dim() == 4:
-                        img_tensor = img.clone().cpu()
-                    else:
-                        raise ValueError(
-                            f"img a {img.dim()} dimensions, attendu 3 ou 4"
-                        )
-
-                    if ground.dim() == 3:
-                        ground_tensor = ground.clone().cpu().unsqueeze(0)
-                    elif ground.dim() == 4:
-                        ground_tensor = ground.clone().cpu()
-                    else:
-                        raise ValueError(f"ground a {ground.dim()} dimensions")
-
-                    # Conversion [-1,1] → [0,1]
-                    img_tensor = (img_tensor + 1.0) / 2.0
-                    ground_tensor = (ground_tensor + 1.0) / 2.0
-                    img_tensor = torch.clamp(img_tensor, 0.0, 1.0)
-                    ground_tensor = torch.clamp(ground_tensor, 0.0, 1.0)
-
-                    # SSIM
-                    ssim_value = dinv.metric.SSIM()(img_tensor, ground_tensor).item()
-                    pbar.set_postfix({"ssim": f"{ssim_value:.4f}"})
-
-                # Sauvegarde des images
-                if record and idx % 5 == 0:
-                    os.makedirs(save_root, exist_ok=True)
-                    # Sauvegarder en [0,1] pour l'affichage
-                    img_save = (img + 1.0) / 2.0
-                    img_save = torch.clamp(img_save, 0.0, 1.0)
-                    # Si img_save a batch, on prend le premier
-                    if img_save.dim() == 4:
-                        img_save = img_save[0]
-                    plt.imsave(
-                        os.path.join(save_root, f"progress/x_{str(idx).zfill(4)}.png"),
-                        clear_color(img_save),
-                    )
-
-            # Retourner la meilleure image (selon SSIM) ou la dernière
-            return img
 
     def p_sample(self, model, x, t):
         raise NotImplementedError
 
+    def manage_image(self, img):
+        if img.dim() == 3:
+            img_t = img.clone().cpu().unsqueeze(0)
+        elif img.dim() == 4:
+            img_t = img.clone().cpu()
+        else:
+            raise ValueError(f"Unexcpected dimension: {img.dim()}, expected 3 or 4")
+        if img_t.min() < 0:
+            img_t = (img_t + 1.0) / 2.0
+        img_t = torch.clamp(img_t, 0.0, 1.0)
+        return img_t
+
     def p_mean_variance(self, model, x, t):
         model_output = model(x, self._scale_timesteps(t))
 
-        # In the case of "learned" variance, model will give twice channels.
         if model_output.shape[1] == 2 * x.shape[1]:
             model_output, model_var_values = torch.split(
                 model_output, x.shape[1], dim=1
             )
         else:
-            # The name of variable is wrong.
-            # This will just provide shape information, and
-            # will not be used for calculating something important in variance.
             model_var_values = model_output
 
         model_mean, pred_xstart = self.mean_processor.get_mean_and_xstart(
@@ -610,11 +515,6 @@ class DDIM(SpacedDiffusion):
         return (coef1 * x_t - pred_xstart) / coef2
 
 
-# =================
-# Helper functions
-# =================
-
-
 def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
     """
     Get a pre-defined beta schedule for the given name.
@@ -660,11 +560,6 @@ def betas_for_alpha_bar(num_diffusion_timesteps, alpha_bar, max_beta=0.999):
         t2 = (i + 1) / num_diffusion_timesteps
         betas.append(min(1 - alpha_bar(t2) / alpha_bar(t1), max_beta))
     return np.array(betas)
-
-
-# ================
-# Helper function
-# ================
 
 
 def extract_and_expand(array, time, target):
